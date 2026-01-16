@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PONG 2D HP EDITION</title>
+    <style>
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        .ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.9); color: #fff; z-index: 10; }
+        h1 { font-size: clamp(3rem, 10vw, 6rem); margin: 0; text-shadow: 0 0 20px #00ff00; }
+        .btn-group { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        button { padding: 15px 40px; font-size: 1.2rem; cursor: pointer; border: 2px solid #fff; background: transparent; color: #fff; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #fff; color: #000; }
+        #fs-btn { position: absolute; top: 20px; right: 20px; padding: 10px; font-size: 0.8rem; }
+        .controls-hp { margin-top: 30px; font-size: 0.8rem; color: #aaa; }
+    </style>
+</head>
+<body>
+    <canvas id="pong"></canvas>
+    <div id="menu" class="ui">
+        <button id="fs-btn" onclick="toggleFS()">⛶ PANTALLA COMPLETA</button>
+        <h1>PONG 2D</h1>
+        <p>HP EDITION • 2026</p>
+        <div class="btn-group">
+            <button onclick="start(1)">1 VS 1</button>
+            <button onclick="start(2)">2 VS 2 (4 Jugadores)</button>
+        </div>
+        <div class="controls-hp">
+            VERDE: P1(Q/A) P3(W/S) | ROJO: P2(P/L) P4(O/K)
+        </div>
+    </div>
+    <div id="over" class="ui" style="display:none">
+        <h2 id="win-txt" style="font-size: 4rem;"></h2>
+        <div class="btn-group">
+            <button id="retry">REINTENTAR</button>
+            <button onclick="location.reload()">MENÚ</button>
+        </div>
+    </div>
+<script>
+    const canvas = document.getElementById("pong");
+    const ctx = canvas.getContext("2d");
+    let ball, players = [], active = false, mode = 1;
+    const keys = {};
+
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; if(active) initPos(); }
+    window.addEventListener('resize', resize); resize();
+    window.addEventListener("keydown", e => { keys[e.key.toLowerCase()] = true; if(["arrowup","arrowdown"," "].includes(e.key.toLowerCase())) e.preventDefault(); });
+    window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+    function toggleFS() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+
+    function start(m) {
+        mode = m; active = true;
+        document.getElementById("menu").style.display = "none";
+        document.getElementById("over").style.display = "none";
+        initPos(); resetBall(1);
+    }
+
+    function initPos() {
+        const h = canvas.height * 0.18, y = canvas.height/2 - h/2;
+        // Controles adaptados a HP (Q/A, P/L, W/S, O/K)
+        players = [
+            { x: 30, y: y, w: 15, h: h, c: "#0f0", lives: 5, u: "q", d: "a", t: "V" },
+            { x: canvas.width-45, y: y, w: 15, h: h, c: "#f00", lives: 5, u: "p", d: "l", t: "R" }
+        ];
+        if(mode === 2) {
+            players.push({ x: canvas.width*0.2, y: y, w: 15, h: h, c: "#0f0", lives: 5, u: "w", d: "s", t: "V" });
+            players.push({ x: canvas.width*0.8-15, y: y, w: 15, h: h, c: "#f00", lives: 5, u: "o", d: "k", t: "R" });
+        }
+        document.getElementById("retry").onclick = () => start(mode);
+    }
+
+    function resetBall(dir) { const s = Math.max(canvas.width/130, 8); ball = { x: canvas.width/2, y: canvas.height/2, r: 10, dx: dir*s, dy: (Math.random()-0.5)*15 }; }
+
+    function update() {
+        if(!active) return;
+        players.forEach(p => { if(keys[p.u] && p.y > 0) p.y -= 10; if(keys[p.d] && p.y < canvas.height-p.h) p.y += 10; });
+        ball.x += ball.dx; ball.y += ball.dy;
+        if(ball.y-ball.r < 0 || ball.y+ball.r > canvas.height) ball.dy *= -1;
+        players.forEach(p => {
+            if(ball.x+ball.r > p.x && ball.x-ball.r < p.x+p.w && ball.y+ball.r > p.y && ball.y-ball.r < p.y+p.h) {
+                if(ball.dx > 0 && ball.x < p.x+p.w/2) { ball.dx = -Math.abs(ball.dx)-0.5; ball.x = p.x-ball.r; }
+                else if(ball.dx < 0 && ball.x > p.x+p.w/2) { ball.dx = Math.abs(ball.dx)+0.5; ball.x = p.x+p.w+ball.r; }
+                ball.dy = ((ball.y-(p.y+p.h/2))/(p.h/2))*Math.abs(ball.dx);
+            }
+        });
+        if(ball.x < 0) score("R"); else if(ball.x > canvas.width) score("V");
+    }
+
+    function score(t) {
+        let l = players.filter(p => p.t !== t); l.forEach(p => p.lives--);
+        if(l.lives <= 0) {
+            active = false; document.getElementById("win-txt").innerText = t==="V"?"GANÓ VERDE":"GANÓ ROJO";
+            document.getElementById("win-txt").style.color = t==="V"?"#0f0":"#f00";
+            document.getElementById("over").style.display = "flex";
+        } else resetBall(t==="V"?-1:1);
+    }
+
+    function render() {
+        ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        if(!active) return;
+        ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.moveTo(canvas.width/2,0); ctx.lineTo(canvas.width/2,canvas.height); ctx.stroke();
+        players.forEach(p => { ctx.fillStyle = p.c; ctx.fillRect(p.x,p.y,p.w,p.h); ctx.font = "bold 20px Arial"; ctx.textAlign = "center"; ctx.fillText("❤️".repeat(p.lives), p.x+p.w/2, p.y-20); });
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
+    }
+    function loop() { update(); render(); requestAnimationFrame(loop); } loop();
+</script>
+</body>
+</html>
